@@ -317,6 +317,18 @@ int McuSemihost_SysTmpName(uint8_t fileID, unsigned char *buffer, size_t bufSize
 }
 #endif
 
+int McuSemihost_ReadLine(unsigned char *buf, size_t bufSize) {
+  int c, i = 0;
+  do {
+    c = McuSemihost_SysReadC(); /* first call is blocking until user presses enter. Then it returns each character on each iteration, until '\n' */
+    if (i<bufSize-1) { /* -1 for zero byte at the end */
+      buf[i++] = c; /* only store into buffer if there is enough space, but continue reading until '\n' */
+    }
+  } while(c!='\n');
+  buf[i] = '\0'; /* zero terminate buffer */
+  return i;
+}
+
 int McuSemihost_SysReadC(void) {
   int res;
   res = McuSemihost_HostRequest(McuSemihost_Op_SYS_READC, NULL);
@@ -417,7 +429,7 @@ int McuSemihost_WriteString(const unsigned char *str) {
 
 int McuSemihost_WriteString0(const unsigned char *str) {
   /* R1 to point to the first byte of the string */
-#if McuSemihost_CONFIG_DEBUG_CONNECTION==McuSemihost_DEBUG_CONNECTION_PEMICRO /* WRITE0 does nothing with PEMCIRO? */
+#if McuSemihost_CONFIG_DEBUG_CONNECTION==McuSemihost_DEBUG_CONNECTION_PEMICRO /* WRITE0 does nothing with PEMICRO? */
   return McuSemihost_SysFileWrite(McuSemihost_STDOUT, str, strlen((char*)str));
 #elif McuSemihost_CONFIG_DEBUG_CONNECTION==McuSemihost_DEBUG_CONNECTION_PYOCD /* PyOCD only supports WRITEC */
   McuShell_SendStr(str, McuSemihost_stdio.stdOut); /* buffer it, then write to a file during flush */
