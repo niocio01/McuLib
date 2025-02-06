@@ -77,7 +77,7 @@
 #endif
 
 #ifndef McuSemihost_CONFIG_CUT_FILENAME_PREFIX
-  #define #ifndef McuSemihost_CONFIG_CUT_FILENAME_PREFIX    (0)
+  #define McuSemihost_CONFIG_CUT_FILENAME_PREFIX    (0)
     /*!< 1: cut file name previx specified in McuSemihost_CONFIG_CUT_FILENAME_PREFIX_STR; 0: prefix cutting with  */
 #endif
 
