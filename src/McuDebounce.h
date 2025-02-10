@@ -55,11 +55,10 @@ typedef struct {
 } McuDbnc_Desc_t;
 
 void McuDbnc_Process(McuDbnc_Desc_t *data);
+#endif /* #if McuLib_CONFIG_SDK_USE_FREERTOS */
 
 void McuDbnc_Deinit(void);
 void McuDbnc_Init(void);
-
-#endif /* #if McuLib_CONFIG_SDK_USE_FREERTOS */
 
 #ifdef __cplusplus
 }  /* extern "C" */
