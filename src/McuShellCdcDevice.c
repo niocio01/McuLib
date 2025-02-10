@@ -280,7 +280,13 @@ uint8_t McuShellCdcDevice_ParseCommand(const unsigned char *cmd, bool *handled, 
 }
 
 void McuShellCdcDevice_Deinit(void) {
-  /* \todo */
+  McuShellCdcDevice_SetBufferRxCharCallback(NULL);
+#if McuShellCdcDevice_CONFIG_USE_FREERTOS
+  vQueueDelete(rxQueue);
+  rxQueue = NULL;
+#else
+  rxRingBuffer = McuRB_DeinitRB(rxRingBuffer);
+#endif
 }
 
 void McuShellCdcDevice_Init(void) {
