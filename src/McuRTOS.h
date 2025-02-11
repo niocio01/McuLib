@@ -4714,6 +4714,7 @@ uint32_t McuRTOS_AppGetRuntimeCounterValueFromISR(void);
 extern "C" {
 #endif
 
+void McuRTOS_Deinit(void);
 void McuRTOS_Init(void);
 
 #ifdef __cplusplus
