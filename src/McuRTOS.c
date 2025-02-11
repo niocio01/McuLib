@@ -5475,6 +5475,10 @@ uint32_t McuRTOS_AppGetRuntimeCounterValueFromISR(void)
 }
 #else
 
+void McuRTOS_Deinit(void) {
+  /* not RTOS configured, nothing to do */
+}
+
 void McuRTOS_Init(void) {
   /* not RTOS configured, nothing to do */
 }
