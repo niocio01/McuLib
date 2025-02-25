@@ -1623,6 +1623,40 @@ int McuShell_ProcessConsoleInput(char *buf, size_t bufSize)
   return McuUtility_strlen(buf);
 }
 
+uint8_t McuShell_ReadLineCRLF(uint8_t *buf, size_t bufSize, McuShell_ConstStdIOType *io) {
+  /* IMPORTANT NOTE: this function *appends* to the buffer, so the buffer needs to be initialized first! */
+  size_t len;
+
+  if (io==NULL) { /* no I/O handler? */
+    return ERR_FAILED;
+  }
+  /* read character(s) */
+  if (io->keyPressed()) {
+    uint8_t ch = '\0';
+    
+    for(;;) {
+      io->stdIn(&ch);  /* read character */
+      if (ch=='\0') { /* nothing in rx buffer? */
+        break; /* get out of loop */
+      }
+      McuUtility_chcat(buf, bufSize, ch); /* buffer always will be zero terminated */
+    } /* for */
+    /* check buffer for \r\n */
+    len = McuUtility_strlen((const char*)buf); /* length of buffer string */
+    if (len==0) { /* error case: there should be something in the buffer? */
+      return ERR_FAILED;
+    }
+    if (len>=bufSize-1) {  /* buffer full? */
+      return ERR_OVERFLOW;
+    } else if (len>=2 && buf[len-2]=='\r' && buf[len-1]=='\n') { /* line end present?*/
+      return ERR_OK;
+    } else {
+      return ERR_BUSY; /* continue reading */
+    }
+  } /* if key pressed */
+  return ERR_BUSY; /* continue reading */
+}
+
 /* END McuShell. */
 
 /*!
