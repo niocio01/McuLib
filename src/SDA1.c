@@ -503,6 +503,7 @@ void SDA1_Init(void)
 
   McuGPIO_GetDefaultConfig(&config);
   config.hw.pin = SDA1_CONFIG_PIN_NUMBER;
+  config.hw.pull = McuGPIO_PULL_UP;
   config.isInput = true;
   pin = McuGPIO_InitGPIO(&config);
 #endif
