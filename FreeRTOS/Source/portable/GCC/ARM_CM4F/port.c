@@ -1,5 +1,7 @@
 #include "McuLibconfig.h"
 
+#if McuLib_CONFIG_SDK_USE_FREERTOS
+
 #if McuLib_CONFIG_CPU_VARIANT==McuLib_CONFIG_CPU_VARIANT_RP2040 && (configNUMBER_OF_CORES == 2)
   #include "rp2040_port.c"
 #else
@@ -1787,3 +1789,5 @@ __asm uint32_t vPortGetIPSR(void) {
 #endif /* McuLib_CONFIG_SDK_USE_FREERTOS */
 
 #endif
+
+#endif /* McuLib_CONFIG_SDK_USE_FREERTOS */
