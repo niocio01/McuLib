@@ -289,6 +289,15 @@ uint8_t McuMinINI_ParseCommand(const unsigned char *cmd, bool *handled, const Mc
 */
 
 #endif
+
+#if McuMinINI_CONFIG_USE_MUTEX
+  void McuMinINI_Lock(void);
+  void McuMinINI_Unlock(void);
+#else
+  #define McuMinINI_Lock()   /* nothing */
+  #define McuMinINI_Unlock()   /* nothing */
+#endif
+
 void McuMinINI_Deinit(void);
 /*
 ** ===================================================================

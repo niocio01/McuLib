@@ -16,6 +16,7 @@
 #include "McuLog.h"
 #include "McuUtility.h"
 #include "McuFlash.h"
+#include "McuMinINI.h"
 
 /* NOTE: we only support one 'file' in FLASH, and only one 'file' in RAM. The one in RAM is for the read-write and temporary one  */
 /* read-only FLASH 'file' is at McuMinINI_CONFIG_FLASH_NVM_ADDR_START */
@@ -25,13 +26,16 @@
 
 int ini_openread(const TCHAR *filename, INI_FILETYPE *file) {
   /* open file in read-only mode. This will use directly the data in FLASH */
+  McuMinINI_Lock();
   memset(file, 0, sizeof(INI_FILETYPE));
   file->header = (MinIniFlashFileHeader*)(McuMinINI_CONFIG_FLASH_NVM_ADDR_START);
   file->data = (unsigned char*)file->header + sizeof(MinIniFlashFileHeader);
   if (file->header->magicNumber != MININI_FLASH_MAGIC_DATA_NUMBER_ID) {
+    McuMinINI_Unlock();
     return 0; /* failed, magic number does not match */
   }
   if (McuUtility_strcmp((char*)file->header->dataName, (char*)filename)!=0) {
+    McuMinINI_Unlock();
     return 0; /* failed, not the file name of the storage */
   }
   file->curr = file->data;
@@ -56,6 +60,7 @@ static bool isTempFile(const TCHAR *filename) {
 #if !McuMinINI_CONFIG_READ_ONLY
 int ini_openwrite(const TCHAR *filename, INI_FILETYPE *file) {
   /* create always a new file */
+  McuMinINI_Lock();
   memset(file, 0, sizeof(INI_FILETYPE)); /* initialize all fields in header */
   memset(dataBuf, 0, sizeof(dataBuf)); /* initialize all data */
   file->header = (MinIniFlashFileHeader*)dataBuf;
@@ -71,14 +76,16 @@ int ini_openwrite(const TCHAR *filename, INI_FILETYPE *file) {
 #endif
 
 int ini_close(INI_FILETYPE *file) {
+  int res = 1; /* ok */
   file->isOpen = false;
   if (!file->isReadOnly  && !isTempFile((const char*)file->header->dataName)) { /* RAM data, and not temp file? */
     /* store data in FLASH */
     if (McuFlash_Program((void*)McuMinINI_CONFIG_FLASH_NVM_ADDR_START, file->header, McuMinINI_CONFIG_FLASH_NVM_MAX_DATA_SIZE)!=ERR_OK) {
-      return 0; /* failed */
+      res = 0; /* failed */
     }
   }
-  return 1; /* ok */
+  McuMinINI_Unlock();
+  return res; /* 1==ok */
 }
 
 int ini_read(TCHAR *buffer, size_t size, INI_FILETYPE *file) {
@@ -130,6 +137,7 @@ int ini_write(TCHAR *buffer, INI_FILETYPE *file) {
 int ini_remove(const TCHAR *filename) {
   MinIniFlashFileHeader *hp;
 
+  McuMinINI_Lock();
   /* check first if we are removing the data in FLASH */
   hp = (MinIniFlashFileHeader*)McuMinINI_CONFIG_FLASH_NVM_ADDR_START;
   if (   hp->magicNumber==MININI_FLASH_MAGIC_DATA_NUMBER_ID /* valid file */
@@ -138,8 +146,10 @@ int ini_remove(const TCHAR *filename) {
   {
     /* flash data file */
     if (McuFlash_Erase((void*)McuMinINI_CONFIG_FLASH_NVM_ADDR_START, McuMinINI_CONFIG_FLASH_NVM_NOF_BLOCKS*McuMinINI_CONFIG_FLASH_NVM_BLOCK_SIZE)==ERR_OK) {
+      McuMinINI_Unlock();
       return 1; /* ok */
     } else {
+      McuMinINI_Unlock();
       return 0; /* error */
     }
   }
@@ -151,8 +161,10 @@ int ini_remove(const TCHAR *filename) {
   {
     /* RAM data file */
     memset(dataBuf, 0, sizeof(dataBuf));
+    McuMinINI_Unlock();
     return 1; /* ok */
   }
+  McuMinINI_Unlock();
   return 0; /* error */
 }
 #endif
@@ -178,18 +190,22 @@ int ini_rename(const TCHAR *source, const TCHAR *dest) {
   /* e.g. test.in~ -> test.ini: this always will do a store from RAM to FLASH! */
   MinIniFlashFileHeader *hp;
 
+  McuMinINI_Lock();
   if (isTempFile(source)) { /* store temporary file into flash */
     hp = (MinIniFlashFileHeader*)dataBuf;
     if (McuUtility_strcmp((char*)hp->dataName, source)!=0) { /* file name in RAM does not match? */
+      McuMinINI_Unlock();
       return 0; /* error */
     }
     McuUtility_strcpy(hp->dataName, sizeof(hp->dataName), (unsigned char*)dest); /* rename file */
     /* store in flash */
     if (McuFlash_Program((void*)McuMinINI_CONFIG_FLASH_NVM_ADDR_START, (unsigned char*)dataBuf, sizeof(dataBuf))!=ERR_OK) {
+      McuMinINI_Unlock();
       return 0; /* failed */
     }
     memset(dataBuf, 0, sizeof(dataBuf)); /* erase RAM file content */
   }
+  McuMinINI_Unlock();
   return 1; /* ok */
 }
 #endif
@@ -273,6 +289,7 @@ static uint8_t DumpData(const McuShell_StdIOType *io) {
   MinIniFlashFileHeader *hp;
   const unsigned char *p;
 
+  McuMinINI_Lock();
   hp = (MinIniFlashFileHeader*)McuMinINI_CONFIG_FLASH_NVM_ADDR_START;
   PrintDataStatus(io, hp, (const unsigned char*)"data");
   if (hp->magicNumber==MININI_FLASH_MAGIC_DATA_NUMBER_ID) {
@@ -291,6 +308,7 @@ static uint8_t DumpData(const McuShell_StdIOType *io) {
       p++;
     }
   }
+  McuMinINI_Unlock();
   return ERR_OK;
 }
 

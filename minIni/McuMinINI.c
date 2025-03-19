@@ -57,7 +57,30 @@
 
 #include "McuMinINI.h"
 #include "McuUtility.h" /* various utility functions */
+#include "McuLog.h"
+#if McuMinINI_CONFIG_USE_MUTEX
+  #include "McuRTOS.h"
+#endif
 
+#if McuMinINI_CONFIG_USE_MUTEX
+  static SemaphoreHandle_t McuMinINI_Mutex; /* built-in FreeRTOS mutex used for lock */
+#endif
+
+#if McuMinINI_CONFIG_USE_MUTEX
+void McuMinINI_Lock(void) {
+  if (xSemaphoreTakeRecursive(McuMinINI_Mutex, portMAX_DELAY)!=pdPASS) {
+    for(;;) {}
+  }
+}
+#endif
+
+#if McuMinINI_CONFIG_USE_MUTEX
+void McuMinINI_Unlock(void) {
+  if (xSemaphoreGiveRecursive(McuMinINI_Mutex)!=pdPASS) {
+    for(;;) {}
+  }
+}
+#endif
 
 #if McuMinINI_CONFIG_PARSE_COMMAND_ENABLED
 static uint8_t PrintStatus(const McuShell_StdIOType *io) {
@@ -505,6 +528,14 @@ void McuMinINI_Deinit(void)
 */
 void McuMinINI_Init(void)
 {
+#if McuMinINI_CONFIG_USE_MUTEX
+  McuMinINI_Mutex = xSemaphoreCreateRecursiveMutex();
+  if (McuMinINI_Mutex==NULL) { /* creation failed? */
+    McuLog_fatal("Failed creating ini mutex");
+    for(;;);
+  }
+  vQueueAddToRegistry(McuMinINI_Mutex, "iniMutex");
+#endif
   (void)ini_init(); /* call low level function */
 }
 

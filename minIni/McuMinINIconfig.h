@@ -77,4 +77,9 @@
     /*!< 1: shell support enabled, 0: otherwise */
 #endif
 
+#if !defined(McuMinINI_CONFIG_USE_MUTEX)
+  #define McuMinINI_CONFIG_USE_MUTEX  (1)
+    /*!< 1: use mutex to make it thread safe, 0: otherwise */
+#endif
+
 #endif /* __McuMinINI_CONFIG_H */
