@@ -1155,7 +1155,7 @@ void vPortStartFirstTask(void) {
 __asm void vPortStartFirstTask(void) {
 #if configCPU_FAMILY_IS_ARM_M4_M7(configCPU_FAMILY)  || configCPU_FAMILY_IS_ARM_M33(configCPU_FAMILY) /* ARM M4(F)/M7/M33 core */
   /* Use the NVIC offset register to locate the stack. */
-#if configRESET_MSP && !INCLUDE_vTaskEndScheduler
+#if configRESET_STACK_POINTER
   ldr r0, =0xE000ED08
   ldr r0, [r0]
   ldr r0, [r0]
@@ -1230,7 +1230,7 @@ void vPortStartFirstTask(void) {
 #endif
 #if configCPU_FAMILY_IS_ARM_M4_M7(configCPU_FAMILY)  || configCPU_FAMILY_IS_ARM_M33(configCPU_FAMILY) /* ARM M4(F)/M7/M33 core */
   __asm volatile (
-#if configRESET_MSP && !INCLUDE_vTaskEndScheduler
+#if configRESET_STACK_POINTER
 #if configLTO_HELPER /* with -flto, we cannot load the constant directly, otherwise we get "Error: offset out of range" with "lto-wrapper failed" */
     " mov r0, #0xE0000000  \n" /* build the constant 0xE000ED08. First load the upper 16 bits */
     " mov r1, #0xED00      \n" /* next load part of the lower 16 bit */

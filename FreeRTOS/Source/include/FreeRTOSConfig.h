@@ -130,6 +130,10 @@
   #define configNUMBER_OF_CORES                   (1) /* number of cores for the kernel */
 #endif
 
+#ifndef configRESET_STACK_POINTER
+  #define configRESET_STACK_POINTER               (1 && !INCLUDE_vTaskEndScheduler) /* reset stack pointer in the scheduler back to the reset value to have more space for the interrupts */
+#endif
+
 #ifndef configUSE_MINI_LIST_ITEM
 	#define configUSE_MINI_LIST_ITEM (1)
 	/*!< MiniListItem_t is used for start and end marker nodes in a FreeRTOS list and ListItem_t is used for all other nodes in a FreeRTOS list.
