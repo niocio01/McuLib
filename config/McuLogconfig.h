@@ -41,6 +41,11 @@
     /*!< 1: use use file for logging, 0: do not use file */
 #endif
 
+#ifndef McuLog_CONFIG_USE_FILE_MACRO
+  #define McuLog_CONFIG_USE_FILE_MACRO         __FILE__
+    /*!< Which macro to be used for files, default __FILE__ */
+#endif
+
 #ifndef McuLog_CONFIG_NOF_CONSOLE_LOGGER
   #define McuLog_CONFIG_NOF_CONSOLE_LOGGER    (1)
     /*!< Number of console loggers */
