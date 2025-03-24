@@ -560,12 +560,18 @@ static const volatile UBaseType_t uxTopUsedPriority = configMAX_PRIORITIES - 1U;
  * from either an ISR or a task. */
 PRIVILEGED_DATA static volatile UBaseType_t uxSchedulerSuspended = ( UBaseType_t ) 0U;
 
+#define USE_RUNTIME_COUNTER_ARRAY  (0) /* << EST, see https://github.com/mcu-debug/rtos-views/pull/57 */
+
 #if ( configGENERATE_RUN_TIME_STATS == 1 )
 
 /* Do not move these variables to function scope as doing so prevents the
  * code working with debuggers that need to remove the static qualifier. */
 PRIVILEGED_DATA static configRUN_TIME_COUNTER_TYPE ulTaskSwitchedInTime[ configNUMBER_OF_CORES ] = { 0U };    /**< Holds the value of a timer/counter the last time a task was switched in. */
+#if USE_RUNTIME_COUNTER_ARRAY
 PRIVILEGED_DATA static volatile configRUN_TIME_COUNTER_TYPE ulTotalRunTime[ configNUMBER_OF_CORES ] = { 0U }; /**< Holds the total amount of execution time as defined by the run time counter clock. */
+#else
+PRIVILEGED_DATA static volatile configRUN_TIME_COUNTER_TYPE ulTotalRunTime = 0U; /**< Holds the total amount of execution time as defined by the run time counter clock. */
+#endif
 
 #endif
 
@@ -5176,7 +5182,11 @@ BaseType_t xTaskIncrementTick( void )
                 #ifdef portALT_GET_RUN_TIME_COUNTER_VALUE
                     portALT_GET_RUN_TIME_COUNTER_VALUE( ulTotalRunTime[ 0 ] );
                 #else
+                #if USE_RUNTIME_COUNTER_ARRAY
                     ulTotalRunTime[ 0 ] = portGET_RUN_TIME_COUNTER_VALUE();
+                #else
+                    ulTotalRunTime = portGET_RUN_TIME_COUNTER_VALUE();
+                #endif
                 #endif
 
                 /* Add the amount of time the task has been running to the
@@ -5186,16 +5196,27 @@ BaseType_t xTaskIncrementTick( void )
                  * overflows.  The guard against negative values is to protect
                  * against suspect run time stat counter implementations - which
                  * are provided by the application, not the kernel. */
+                #if USE_RUNTIME_COUNTER_ARRAY
                 if( ulTotalRunTime[ 0 ] > ulTaskSwitchedInTime[ 0 ] )
+                #else
+                if( ulTotalRunTime > ulTaskSwitchedInTime[ 0 ] )
+                #endif
                 {
+                    #if USE_RUNTIME_COUNTER_ARRAY
                     pxCurrentTCB->ulRunTimeCounter += ( ulTotalRunTime[ 0 ] - ulTaskSwitchedInTime[ 0 ] );
+                    #else
+                    pxCurrentTCB->ulRunTimeCounter += ( ulTotalRunTime- ulTaskSwitchedInTime[ 0 ] );
+                    #endif
                 }
                 else
                 {
                     mtCOVERAGE_TEST_MARKER();
                 }
-
+                #if USE_RUNTIME_COUNTER_ARRAY
                 ulTaskSwitchedInTime[ 0 ] = ulTotalRunTime[ 0 ];
+                #else
+                ulTaskSwitchedInTime[ 0 ] = ulTotalRunTime;
+                #endif
             }
             #endif /* configGENERATE_RUN_TIME_STATS */
 
