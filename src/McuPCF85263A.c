@@ -90,8 +90,10 @@
 #define McuPCF85263A_MEMORY_TIME_SIZE       (4) /* 0x00-0x03, number of bytes for time information on device */
 #define McuPCF85263A_MEMORY_DATE_SIZE       (4) /* 0x04-0x07, number of bytes for date information on device */
 #define McuPCF85263A_MEMORY_TIME_DATE_SIZE  (8) /* 0x00-0x07, number of bytes for data and time information on device */
+#define McuPCF85263A_MEMORY_TIMESTAMP_SIZE  (6) /* 0x11-0x16, number of bytes for alarm information on device */
 
 #pragma endregion 
+
 
 #pragma region Typedefs
 typedef struct McuPCF85263A_TTIME {  /* Time in binary format (24h) */
@@ -110,7 +112,17 @@ typedef struct McuPCF85263A_TDATE {  /* Date in binary format */
   uint8_t dayOfWeek;                 /* Day of week, where 0 is the first day. In the range of 0..6 */
 } McuPCF85263A_TDATE;
 
+typedef struct McuPCF85263A_TTIMESTAMP {  /* Timestamp in binary format (24h) */
+  uint8_t year;                      /* year */
+  uint8_t month;                     /* month */
+  uint8_t day;                       /* day */
+  uint8_t hour;                      /* hours */
+  uint8_t min;                       /* minutes */
+  uint8_t sec;                       /* seconds */
+} McuPCF85263A_TTIMESTAMP;
+
 #pragma endregion
+
 
 #pragma region Register_ReadWrites
 uint8_t McuPCF85263A_ReadBlock(uint8_t addr, uint8_t *buf, size_t bufSize) {
@@ -135,6 +147,13 @@ uint8_t McuPCF85263A_ReadOffset(uint8_t *data) {
 }
 uint8_t McuPCF85263A_WriteOffset(uint8_t data) {
   return McuPCF85263A_WriteByte(McuPCF85263A_ADDRESS_OFFSET, data);
+}
+
+uint8_t McuPCF85263A_ReadAlarmEnables(uint8_t *data) {
+  return McuPCF85263A_ReadByte(McuPCF85263A_ADDRESS_ALARM_ENABLES, data);
+}
+uint8_t McuPCF85263A_WriteAlarmEnables(uint8_t data) {
+  return McuPCF85263A_WriteByte(McuPCF85263A_ADDRESS_ALARM_ENABLES, data);
 }
 
 uint8_t McuPCF85263A_ReadOscilator(uint8_t *data) {
@@ -216,7 +235,30 @@ uint8_t McuPCF85263A_WriteResets(uint8_t data) {
 
 #pragma endregion Register_ReadWrites
 
+
 #pragma region TimeDateFunctions
+
+uint8_t McuPCF85263A_WriteClockOutputFrequency(McuPCF85263A_COF_Frequency_e frequency) {
+  uint8_t data;
+
+  if (McuPCF85263A_ReadFunction(&data)!=ERR_OK) { /* read current value */
+    return ERR_FAILED;
+  }
+  /* Clock Output Frequency:
+   * 000: 32768
+   * 001: 16387
+   * 010: 8196
+   * 011: 4096
+   * 100: 2048
+   * 101: 1024
+   * 110: 1
+   * 111: CLKOUT=LOW */
+  if (frequency>7) {
+    return ERR_RANGE;
+  }
+  data |= (frequency&7); /* set COF bits [2:0] */
+  return McuPCF85263A_WriteByte(McuPCF85263A_ADDRESS_CONTROL_Function, data);
+}
 
 bool McuPCF85263A_Is24hMode(void) {
   uint8_t res, osc;
@@ -227,7 +269,6 @@ bool McuPCF85263A_Is24hMode(void) {
   }
   return (osc&(1<<5))==0; /* 0: 24-hour mode, 1: 12-hour mode */
 }
-
 
 uint8_t McuPCF85263A_ReadTimeDate(McuPCF85263A_TTIME *time, McuPCF85263A_TDATE *date) {
   uint8_t buf[McuPCF85263A_MEMORY_TIME_DATE_SIZE];
@@ -252,6 +293,27 @@ uint8_t McuPCF85263A_ReadTimeDate(McuPCF85263A_TTIME *time, McuPCF85263A_TDATE *
   date->dayOfWeek =(uint8_t)(buf[5]); /* 0: Sunday, 1: Monday, ... 6: Saturday */
   date->month = (uint8_t)((buf[6]>>4)*10 + (buf[6]&0x0F)); /* 1: January */
   date->year = (uint8_t)((buf[7]>>4)*10 + (buf[7]&0x0F));
+  return ERR_OK;
+}
+
+uint8_t McuPCF85263A_ReadTimestamp(uint8_t TsNum, McuPCF85263A_TTIMESTAMP *timestamp) {
+  if (TsNum>2) {
+    return ERR_RANGE;
+  }
+  uint8_t buf[McuPCF85263A_MEMORY_TIMESTAMP_SIZE];
+  bool is24hMode;
+
+  if (McuPCF85263A_ReadBlock(McuPCF85263A_ADDRESS_TSR1_START_ADDR + TsNum * McuPCF85263A_MEMORY_TIMESTAMP_SIZE,
+      buf, sizeof(buf))!=ERR_OK) {
+    return ERR_FAILED;
+  }
+  is24hMode = McuPCF85263A_Is24hMode();
+  timestamp->sec = (uint8_t)(((buf[0]&0x70)>>4)*10 + (buf[0]&0x0F)); /* seconds in BCD format */
+  timestamp->min = (uint8_t)((buf[1]>>4)*10 + (buf[1]&0x0F)); /* minutes in BCD format */
+  timestamp->hour = (uint8_t)(((buf[2]&0x10)>>4)*10 + (buf[2]&0x0F)); /* hour in BCD format */
+  timestamp->day = (uint8_t)((buf[3]>>4)*10 + (buf[3]&0x0F)); /* BCD format */
+  timestamp->month = (uint8_t)((buf[4]>>4)*10 + (buf[4]&0x0F)); /* 1: January */
+  timestamp->year = (uint8_t)((buf[5]>>4)*10 + (buf[5]&0x0F));
   return ERR_OK;
 }
 
@@ -406,6 +468,25 @@ uint8_t McuPCF85263A_GetTimeDate(TIMEREC *time, DATEREC *date) {
   return ERR_OK;
 }
 
+uint8_t McuPCF85263A_GetTimestamp(uint8_t tsNum, TIMEREC *time, DATEREC *date) {
+  McuPCF85263A_TTIMESTAMP ttimestamp;
+
+  if (tsNum>3) {
+    return ERR_RANGE;
+  }
+  if (McuPCF85263A_ReadTimestamp(tsNum, &ttimestamp)!=ERR_OK) {
+    return ERR_FAILED;
+  }
+  time->Hour = ttimestamp.hour;
+  time->Min = ttimestamp.min;
+  time->Sec = ttimestamp.sec;
+  time->Sec100 = 0; /* not available */
+  date->Year = (uint16_t)(ttimestamp.year+2000);
+  date->Month = ttimestamp.month;
+  date->Day = ttimestamp.day;
+  return ERR_OK;
+}
+
 static const char *GetWeekDayString(uint8_t weekday) {
   static const char *const weekDays[]={"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
   if (weekday<=sizeof(weekDays)/sizeof(weekDays[0])) {
@@ -451,6 +532,223 @@ static uint8_t StrCatHWTimeDate(uint8_t *buf, size_t bufSize) {
   return ERR_OK;
 }
 #pragma endregion TimeDateFunctions
+
+
+#pragma region AlarmFunctions
+
+uint8_t McuPCF85263A_ReadResetAlarmFlags(uint8_t *alarmFlags) {
+  uint8_t data;
+  
+  if (McuPCF85263A_ReadFlags(&data)!=ERR_OK) { /* read current value */
+    return ERR_FAILED;
+  }
+}
+
+uint8_t McuPCF85263A_WriteResetAlarmFlag(uint8_t alarmNr) {
+  uint8_t data;
+  if (alarmNr>1) return ERR_RANGE;  
+
+  if (McuPCF85263A_ReadFlags(&data)!=ERR_OK) { /* read current value */
+    return ERR_FAILED;
+  }
+  /* AF: reset alarm flag with writing a 0 to it */
+  data &= ~(1<<5+alarmNr); /* clear AF (Alarm Flag) bit */
+  return McuPCF85263A_WriteByte(McuPCF85263A_ADDRESS_CONTROL_FLAGS, data);
+}
+
+uint8_t McuPCF85263A_ReadAlarmSecond(uint8_t alarmNr, uint8_t *second, bool *enabled) {
+  uint8_t data, res;
+  if (alarmNr!=0) return ERR_RANGE;  
+
+  res = McuPCF85263A_ReadByte(McuPCF85263A_ADDRESS_ALARM1_SECOND, &data);
+  if (res!=ERR_OK) return ERR_FAILED;
+  *second = ((data&0x70)>>4)*10 + (data&0x0F); /* BCD encoded */
+
+  res = McuPCF85263A_ReadAlarmEnables(&data);
+  if (res!=ERR_OK) return ERR_FAILED;  
+  *enabled = (data&(1<<0))==1; /* 0: disabled (default), 1: enabled */
+  
+  return ERR_OK;
+}
+
+uint8_t McuPCF85263A_WriteAlarmSecond(uint8_t alarmNr, uint8_t second, bool enable) {
+  uint8_t data, res;
+  if (alarmNr!=0) return ERR_RANGE;  
+  if (second>59) return ERR_RANGE;
+  data = 0;
+  data = ((second/10)<<4)|(second%10); /* encoded in BCD */
+  res = McuPCF85263A_WriteByte(McuPCF85263A_ADDRESS_ALARM1_SECOND, data);
+  if (res!=ERR_OK) return ERR_FAILED;
+
+  res = McuPCF85263A_ReadAlarmEnables(&data);
+  if (res!=ERR_OK) return ERR_FAILED;
+  data = (data&0xFE) | ((enable&0x01)<<0); /* set/clear alarm enable bit */
+  return McuPCF85263A_WriteAlarmEnables(data);
+}
+
+uint8_t McuPCF85263A_ReadAlarmMinute(uint8_t alarmNr, uint8_t *minute, bool *enabled) {
+  uint8_t data, res, enBit;
+  if (alarmNr>1) return ERR_RANGE;
+  enBit = (alarmNr==0) ? 1 : 5; /* 1: alarm1, 5: alarm2 */
+
+  if (alarmNr==0)
+    res = McuPCF85263A_ReadByte(McuPCF85263A_ADDRESS_ALARM1_MINUTE, &data);
+  else
+    res = McuPCF85263A_ReadByte(McuPCF85263A_ADDRESS_ALARM2_MINUTE, &data);
+  if (res!=ERR_OK) return ERR_FAILED;
+  *minute = ((data&0x70)>>4)*10 + (data&0x0F); /* BCD encoded */
+
+  res = McuPCF85263A_ReadAlarmEnables(&data);
+  if (res!=ERR_OK) return ERR_FAILED;  
+  *enabled = (data&(1<<enBit))==1; /* 0: disabled (default), 1: enabled */
+  
+  return ERR_OK;
+}
+
+uint8_t McuPCF85263A_WriteAlarmMinute(uint8_t alarmNr, uint8_t minute, bool enable) {
+  uint8_t data, res, enBit;
+  if (alarmNr>1) return ERR_RANGE;  
+  if (minute>59) return ERR_RANGE;
+  enBit = (alarmNr==0) ? 1 : 5; /* 1: alarm1, 5: alarm2 */
+
+  data = 0;
+  data = ((minute/10)<<4)|(minute%10); /* encoded in BCD */
+  if (alarmNr==0)
+    res = McuPCF85263A_WriteByte(McuPCF85263A_ADDRESS_ALARM1_MINUTE, data);
+  else
+    res = McuPCF85263A_WriteByte(McuPCF85263A_ADDRESS_ALARM2_MINUTE, data);
+  if (res!=ERR_OK) return ERR_FAILED;
+
+  res = McuPCF85263A_ReadAlarmEnables(&data);
+  if (res!=ERR_OK) return ERR_FAILED;  
+  
+  data = (data&(~(1<<enBit))) | ((enable&0x01)<<enBit); /* set/clear alarm enable bit */
+  return McuPCF85263A_WriteAlarmEnables(data);
+}
+
+uint8_t McuPCF85263A_ReadAlarmHour(uint8_t alarmNr, uint8_t *hour, bool *enabled, bool *is24h, bool *isAM) {
+  uint8_t data, res, enBit;
+  if (alarmNr>1) return ERR_RANGE;  
+  enBit = (alarmNr==0) ? 2 : 6; /* 2: alarm1, 6: alarm2 */
+
+  *is24h = McuPCF85263A_Is24hMode();
+  if (alarmNr==0)
+    res = McuPCF85263A_ReadByte(McuPCF85263A_ADDRESS_ALARM1_HOUR, &data);
+  else
+    res = McuPCF85263A_ReadByte(McuPCF85263A_ADDRESS_ALARM2_HOUR, &data);
+  if (res!=ERR_OK) return ERR_FAILED;
+  if (*is24h) {
+    *hour = ((data&0x30)>>4)*10 + (data&0x0F); /* BCD encoded */
+    *isAM = false;
+  } else {
+    *hour = ((data&0x70)>>4)*10 + (data&0x0F); /* BCD encoded */
+    *isAM = (data&(1<<5))==0;
+  }
+
+  res = McuPCF85263A_ReadAlarmEnables(&data);
+  if (res!=ERR_OK) return ERR_FAILED;    
+  *enabled = (data&(1<<enBit))==1; /* 0: disabled (default), 1: enabled */
+  
+  return ERR_OK;
+}
+
+uint8_t McuPCF85263A_WriteAlarmHour(uint8_t alarmNr, uint8_t hour, bool enable, bool is24h, bool isAM) {
+  uint8_t data, res, enBit;
+  if (alarmNr>1) return ERR_RANGE;  
+  if (is24h && hour>23) {
+    return ERR_RANGE;
+  } else if (!is24h && hour>12) {
+    return ERR_RANGE;
+  }
+  enBit = (alarmNr==0) ? 2 : 6; /* 2: alarm1, 6: alarm2 */
+
+  data = 0;
+  if (is24h) {
+    data |= ((hour/10)<<4)|(hour%10); /* BCD encoded */
+  } else {
+    if (hour>12) { /* PM */
+      hour -= 12;
+      data |= (1<<5); /* set PM bit */
+    }
+    data |= (hour<<4)|(hour%10);
+  }
+  if (alarmNr==0)
+    res = McuPCF85263A_WriteByte(McuPCF85263A_ADDRESS_ALARM1_HOUR, data);
+  else
+    res = McuPCF85263A_WriteByte(McuPCF85263A_ADDRESS_ALARM2_HOUR, data);
+  if (res!=ERR_OK) return ERR_FAILED;
+
+  res = McuPCF85263A_ReadAlarmEnables(&data);
+  if (res!=ERR_OK) return ERR_FAILED;  
+  
+  data = (data&(~(1<<enBit))) | ((enable&0x01)<<enBit); /* set/clear alarm enable bit */
+  return McuPCF85263A_WriteAlarmEnables(data);
+}
+
+uint8_t McuPCF85263A_ReadAlarmDay(uint8_t alarmNr, uint8_t *day, bool *enabled) {
+  uint8_t data, res;
+  if (alarmNr!=0) return ERR_RANGE;    
+  
+  res = McuPCF85263A_ReadByte(McuPCF85263A_ADDRESS_ALARM1_DAY, &data);  
+  if (res!=ERR_OK) return ERR_FAILED;
+  *day = ((data&0x70)>>4)*10 + (data&0x0F); /* BCD encoded */
+
+  res = McuPCF85263A_ReadAlarmEnables(&data);
+  if (res!=ERR_OK) return ERR_FAILED;  
+  *enabled = (data&(1<<3))==1; /* 0: disabled (default), 1: enabled */
+  
+  return ERR_OK;
+}
+
+uint8_t McuPCF85263A_WriteAlarmDay(uint8_t alarmNr, uint8_t day, bool enable) {
+  uint8_t data, res;
+  if (alarmNr!=0) return ERR_RANGE;  
+  if (day>31) return ERR_RANGE;
+  data = 0;
+  data = ((day/10)<<4)|(day%10); /* encoded in BCD */
+  res = McuPCF85263A_WriteByte(McuPCF85263A_ADDRESS_ALARM1_DAY, data);
+  if (res!=ERR_OK) return ERR_FAILED;
+
+  res = McuPCF85263A_ReadAlarmEnables(&data);
+  if (res!=ERR_OK) return ERR_FAILED;  
+  
+  data = (data&0xF7) | ((enable&0x01)<<3); /* set/clear alarm enable bit */
+  return McuPCF85263A_WriteAlarmEnables(data);
+}
+
+uint8_t McuPCF85263A_ReadAlarmWeekDay(uint8_t alarmNr, uint8_t *weekDay, bool *enabled) {
+  uint8_t data, res;
+  if (alarmNr!=1) return ERR_RANGE;
+  
+  res = McuPCF85263A_ReadByte(McuPCF85263A_ADDRESS_ALARM2_WEEKDAY, &data);  
+  if (res!=ERR_OK) return ERR_FAILED;
+  *weekDay = data&0x07; /* BCD encoded */
+
+  res = McuPCF85263A_ReadAlarmEnables(&data);
+  if (res!=ERR_OK) return ERR_FAILED;  
+  *enabled = (data&(1<<4))==1; /* 0: disabled (default), 1: enabled */
+  
+  return ERR_OK;
+}
+
+uint8_t McuPCF85263A_WriteAlarmWeekDay(uint8_t alarmNr, uint8_t weekDay, bool enable) {
+  uint8_t data, res;
+  if (alarmNr!=1) return ERR_RANGE;  
+  if (weekDay>6) return ERR_RANGE;
+  data = 0;
+  data = weekDay&0x07; /* encoded in BCD */
+  res = McuPCF85263A_WriteByte(McuPCF85263A_ADDRESS_ALARM2_WEEKDAY, data);
+  if (res!=ERR_OK) return ERR_FAILED;
+
+  res = McuPCF85263A_ReadAlarmEnables(&data);
+  if (res!=ERR_OK) return ERR_FAILED;  
+  
+  data = (data&0xEF) | ((enable&0x01)<<4); /* set/clear alarm enable bit */
+  return McuPCF85263A_WriteAlarmEnables(data);
+}
+
+#pragma endregion AlarmFunctions
+
 
 #pragma region ShellCommands
 
@@ -532,10 +830,6 @@ uint8_t McuPCF85263A_ParseCommand(const unsigned char *cmd, bool *handled, const
   return ERR_OK;
 }
 #pragma endregion ShellCommands
-
-
-
-
 
 
 void McuPCF85263A_Init(void) {
